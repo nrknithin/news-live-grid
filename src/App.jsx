@@ -23,6 +23,15 @@ export default function App() {
     const i = CHANNELS.findIndex((c) => c.id === id);
     return i >= 0 ? i : 0;
   });
+  const [spotlightChannelIndex, setSpotlightChannelIndex] = useState(() => {
+    const id = localStorage.getItem('lg.spotlightId');
+    const i = CHANNELS.findIndex((c) => c.id === id);
+    if (i >= 0) return i;
+    // Fallback to active channel, then channel 0
+    const aId = localStorage.getItem('lg.activeId');
+    const ai = CHANNELS.findIndex((c) => c.id === aId);
+    return ai >= 0 ? ai : 0;
+  });
   const [hidden, setHidden] = useState(() => {
     try {
       const raw = localStorage.getItem('lg.hiddenIds');
@@ -46,6 +55,10 @@ export default function App() {
     localStorage.setItem('lg.activeId', id);
   }, [activeIndex]);
   useEffect(() => {
+    const id = CHANNELS[spotlightChannelIndex]?.id ?? '';
+    localStorage.setItem('lg.spotlightId', id);
+  }, [spotlightChannelIndex]);
+  useEffect(() => {
     const ids = [...hidden].map((i) => CHANNELS[i]?.id).filter(Boolean);
     localStorage.setItem('lg.hiddenIds', JSON.stringify(ids));
   }, [hidden]);
@@ -54,10 +67,11 @@ export default function App() {
   const focusedChannel =
     activeIndex !== -1 && !hidden.has(activeIndex) ? CHANNELS[activeIndex] : null;
 
-  // Pick the spotlight: focused channel if valid, else first visible.
+  // Spotlight is independent of audio focus. Use the persisted spotlight
+  // unless it's hidden, in which case fall back to first visible.
   let spotlightIndex = -1;
-  if (focusedChannel) {
-    spotlightIndex = activeIndex;
+  if (!hidden.has(spotlightChannelIndex)) {
+    spotlightIndex = spotlightChannelIndex;
   } else {
     for (let i = 0; i < CHANNELS.length; i++) {
       if (!hidden.has(i)) {
@@ -80,30 +94,24 @@ export default function App() {
   }, []);
 
   const setAudioFocus = useCallback((index) => {
-    const apply = () => {
-      setActiveIndex(index);
-      playersRef.current.forEach((player, i) => {
-        if (!player?.mute) return;
-        try {
-          if (i === index) {
-            player.unMute();
-            player.setVolume(100);
-          } else {
-            player.mute();
-          }
-        } catch (_) {}
-      });
-    };
-    if (document.startViewTransition) {
-      document.startViewTransition(apply);
-    } else {
-      apply();
-    }
+    setActiveIndex(index);
+    playersRef.current.forEach((player, i) => {
+      if (!player?.mute) return;
+      try {
+        if (i === index) {
+          player.unMute();
+          player.setVolume(100);
+        } else {
+          player.mute();
+        }
+      } catch (_) {}
+    });
   }, []);
 
   const focus = useCallback(
     (i) => {
       if (hidden.has(i)) return;
+      setSpotlightChannelIndex(i);
       setAudioFocus(i);
     },
     [hidden, setAudioFocus]
@@ -223,8 +231,13 @@ export default function App() {
                 apiReady={apiReady}
                 onPlayerReady={handlePlayerReady}
                 onClick={() => {
-                  if (i === activeIndex) muteAll();
-                  else focus(i);
+                  if (i === spotlightIndex) {
+                    // Toggle audio on the existing spotlight.
+                    if (i === activeIndex) muteAll();
+                    else setAudioFocus(i);
+                  } else {
+                    focus(i);
+                  }
                 }}
                 onMute={muteAll}
               />

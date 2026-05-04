@@ -74,8 +74,7 @@ export default function Tile({
   const cls = [
     'tile',
     hidden ? 'hidden' : '',
-    spotlight ? 'tile-spotlight' : 'tile-film',
-    audio ? 'tile-audio' : '',
+    spotlight ? 'tile-spotlight tile-audio' : 'tile-film',
   ]
     .filter(Boolean)
     .join(' ');
@@ -89,7 +88,6 @@ export default function Tile({
     <div
       ref={tileRef}
       className={cls}
-      style={{ '--vt-name': `tile-${index}` }}
       role="button"
       tabIndex={0}
       onClick={handleClick}
